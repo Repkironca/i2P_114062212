@@ -13,12 +13,16 @@ from src.utils import Logger, PositionCamera, GameSettings, Position
 from src.core.services import sound_manager
 from src.sprites import Sprite
 from typing import override
+from src.interface.components import Button
 
 class GameScene(Scene):
+    # 喔我真的好討厭冒號前不空後空的規範，為什麼不是前空後不空：（
     game_manager: GameManager
     online_manager: OnlineManager | None
     sprite_online: Sprite
-    
+    overlay_button: Button
+    show_overlay: bool
+
     def __init__(self):
         super().__init__()
         # Game Manager
@@ -35,7 +39,44 @@ class GameScene(Scene):
             self.online_manager = None
         self.sprite_online = Sprite("ingame_ui/options1.png", (GameSettings.TILE_SIZE, GameSettings.TILE_SIZE))
         
+        """
+        這坨都拿來控制 button
+        """
+        self.show_overlay = False
+        btn_size = 64
+        btn_x = GameSettings.SCREEN_WIDTH - btn_size - 20
+        btn_y = 20
+        self.overlay_button = Button(
+            "UI/button_backpack.png",
+            "UI/button_backpack_hover.png",
+            btn_x, btn_y,
+            btn_size, btn_size,
+            self.switch_overlay
+        )
+
+        """
+        這坨拿來控制退出 overlay button
+        """
+        close_btn_x = GameSettings.SCREEN_WIDTH - 20 - btn_size - 10 
+        close_btn_y = 20 + 10
+        self.close_overlay_button = Button(
+            "UI/button_x.png",
+            "UI/button_x_hover.png",
+            close_btn_x, close_btn_y,
+            btn_size, btn_size,
+            self.switch_overlay
+        )
+
+
+    def switch_overlay(self) -> None:
+        if (self.show_overlay):
+            sound_manager.play_sound("gugugaga_2.mp3")
+        else:
+            sound_manager.play_sound("gugugaga.mp3")
+        self.show_overlay = not self.show_overlay # 隱藏掉
         
+
+
     @override
     def enter(self) -> None:
         sound_manager.play_bgm("RBY 103 Pallet Town.ogg")
@@ -52,6 +93,12 @@ class GameScene(Scene):
         # Check if there is assigned next scene
         self.game_manager.try_switch_map()
         
+        # update button
+        if self.show_overlay:
+            self.close_overlay_button.update(dt)
+        else:
+            self.overlay_button.update(dt)
+
         # Update player and other data
         if self.game_manager.player:
             self.game_manager.player.update(dt)
@@ -98,3 +145,10 @@ class GameScene(Scene):
                     pos = cam.transform_position_as_position(Position(player["x"], player["y"]))
                     self.sprite_online.update_pos(pos)
                     self.sprite_online.draw(screen)
+
+        self.overlay_button.draw(screen)
+        if self.show_overlay:
+            overlay_surface = pg.Surface((GameSettings.SCREEN_WIDTH-40, GameSettings.SCREEN_HEIGHT-40), pg.SRCALPHA)
+            overlay_surface.fill((0, 0, 0, 150)) # 聽說 150 是半透明
+            screen.blit(overlay_surface, (20, 20))
+            self.close_overlay_button.draw(screen) # 退出鈕
