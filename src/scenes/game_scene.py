@@ -1,6 +1,11 @@
 """
 負責管遊戲畫面，更新玩家與敵人
 還有 camera 之類雜七雜八的東西
+
+render: 把字體變成圖片，才可以 blit 出來
+parameter 分別是 text: str, antialias: bool, color: tuple
+str 放文字，antialias 是去鋸齒，設為 True 就對了別管他
+color 分別是 (R, G, B)
 """
 
 import pygame as pg
@@ -67,6 +72,11 @@ class GameScene(Scene):
             self.switch_overlay
         )
 
+        """
+        這坨拿來處理字體
+        """
+        self.font = pg.font.SysFont("Arial", 24)
+        self.title_font = pg.font.SysFont("Arial", 32, bold=True)
 
     def switch_overlay(self) -> None:
         if (self.show_overlay):
@@ -152,3 +162,44 @@ class GameScene(Scene):
             overlay_surface.fill((0, 0, 0, 150)) # 聽說 150 是半透明
             screen.blit(overlay_surface, (20, 20))
             self.close_overlay_button.draw(screen) # 退出鈕
+
+            """
+            下面這坨來畫背包內容
+            """
+            title = self.title_font.render("GUGUGAGA", True, (255, 255, 0)) # 聽說這是黃色
+            screen.blit(title, (60, 40))
+            
+            bag = self.game_manager.bag
+            start_x = 60
+            start_y = 100
+            line_height = 35
+            
+            # monsters
+            monster_title = self.font.render(f"--- Monsters Without Babies : Total = ({len(bag.monsters)}) ---", True, (100, 255, 100))
+            screen.blit(monster_title, (start_x, start_y))
+            start_y += line_height
+            
+            if not bag.monsters:
+                screen.blit(self.font.render("What the hell bro there's no monsters here", True, (200, 200, 200)), (start_x + 20, start_y))
+                start_y += line_height
+            else:
+                for mon in bag.monsters:
+                    text = f"{mon['name']} (Level.{mon['level']}) - HP: {mon['hp']}/{mon['max_hp']}"
+                    surf = self.font.render(text, True, (255, 255, 255))
+                    screen.blit(surf, (start_x + 20, start_y))
+                    start_y += line_height
+
+            # itmes
+            start_y += 25 # 多一點間隔，因為我懶得畫間隔線
+            item_title = self.font.render(f"--- Items : Total = ({len(bag.items)}) ---", True, (100, 255, 100))
+            screen.blit(item_title, (start_x, start_y))
+            start_y += line_height
+
+            if not bag.items:
+                screen.blit(self.font.render("How poor are you? You're bag is emptyyyyyyyyy!", True, (200, 200, 200)), (start_x + 20, start_y))
+            else:
+                for it in bag.items:
+                    text = f"{it['name']} x {it['count']}"
+                    surf = self.font.render(text, True, (255, 255, 255))
+                    screen.blit(surf, (start_x + 20, start_y))
+                    start_y += line_height

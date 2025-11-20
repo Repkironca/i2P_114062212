@@ -1,3 +1,9 @@
+"""
+掌管你的背包！
+因為私有變數太躁了
+所以我直接扁了 property 出來
+"""
+
 import pygame as pg
 import json
 from src.utils import GameSettings
@@ -12,6 +18,14 @@ class Bag:
         self._monsters_data = monsters_data if monsters_data else []
         self._items_data = items_data if items_data else []
 
+    @property
+    def monsters(self) -> list[Monster]:
+        return self._monsters_data
+
+    @property
+    def items(self) -> list[Item]:
+        return self._items_data
+    
     def update(self, dt: float):
         pass
 
