@@ -85,7 +85,8 @@ class SettingScene(Scene):
             initial_value = GameSettings.AUDIO_VOLUME
         )
 
-    def shutdown_game(self):
+    @staticmethod
+    def shutdown_game() -> None:
         sound_manager.play_sound("drop.wav")
         # 有一說一我根本沒看懂下面的語法
         cmd_duck = (
