@@ -16,7 +16,7 @@ class Button(UIComponent):
 
     def __init__(
         self,
-        img_path: str, img_hovered_path:str,
+        img_path: str, img_hovered_path: str | None,
         x: int, y: int, width: int, height: int,
         on_click: Callable[[], None] | None = None
     ):
@@ -31,7 +31,18 @@ class Button(UIComponent):
         self.on_click = ...
         '''
 
-        self.img_button_hover = Sprite(img_hovered_path, (width, height)) # (str, (int, int)), which stands for size
+        if img_hovered_path is not None: # 有正常路徑
+            self.img_button_hover = Sprite(img_hovered_path, (width, height))
+        else: # 我美術資源不足啦啦啦
+            self.img_button_hover = Sprite(img_path, (width, height))
+            factor = 1.1
+            new_w = int(width * factor)
+            new_h = int(height * factor)
+            
+            # 聽說這樣可以放大
+            self.img_button_hover.image = pg.transform.scale(self.img_button_default.image, (new_w, new_h))
+            self.img_button_hover.rect = self.img_button_hover.image.get_rect()
+
         self.img_button = self.img_button_default # Then why spliting it into two steps
         self.on_click = on_click
 
@@ -65,7 +76,12 @@ class Button(UIComponent):
         You might want to change this too
         It was "_ = screen.blit(self.img_button_image, self.hitbox)"
         '''
-        _ = screen.blit(self.img_button.image, self.hitbox)
+        # 中心對齊中心，因為我的 hover 可能是手搓的
+        current_img = self.img_button.image
+        img_rect = current_img.get_rect()
+        img_rect.center = self.hitbox.center
+        
+        screen.blit(current_img, img_rect)
 
 
 def main():
