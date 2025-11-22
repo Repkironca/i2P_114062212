@@ -1,7 +1,11 @@
+"""
+管好你自己。
+喔，草叢判定跟碰撞判定也在這裡
+"""
 from __future__ import annotations
 import pygame as pg
 from .entity import Entity
-from src.core.services import input_manager
+from src.core.services import input_manager, scene_manager
 from src.utils import Position, PositionCamera, GameSettings, Logger
 from src.core import GameManager
 import math
@@ -113,7 +117,17 @@ class Player(Entity):
         if tp:
             dest = tp.destination
             self.game_manager.switch_map(dest)
-                
+        
+        # 草叢
+        if input_manager.key_pressed(pg.K_SPACE):
+            player_rect = self.animation.rect
+            if self.game_manager.current_map.check_bush(player_rect):
+                # 在上面 import 會壞掉，是因為循環嗎？之後再研究
+                from src.scenes.catch_scene import CatchScene
+                catch_scene = CatchScene(self.game_manager)
+                scene_manager.register_scene("catch", catch_scene)
+                scene_manager.change_scene("catch")
+
         super().update(dt)
 
     @override

@@ -1,3 +1,8 @@
+"""
+這邊會告訴你誰是草叢、誰是傳送門
+誰是障礙物、誰是敵人之類的
+"""
+
 import pygame as pg
 import pytmx
 
@@ -13,6 +18,7 @@ class Map:
     # Rendering Properties
     _surface: pg.Surface
     _collision_map: list[pg.Rect]
+    _bush_map: list[pg.Rect] # 放草叢ㄉ
 
     def __init__(self, path: str, tp: list[Teleport], spawn: Position):
         self.path_name = path
@@ -28,6 +34,14 @@ class Map:
         self._render_all_layers(self._surface)
         # Prebake the collision map
         self._collision_map = self._create_collision_map()
+        self._bush_map = self._create_bush_map()
+
+    # 這咖拿來檢查腳下的是不是草叢
+    def check_bush(self, rect: pg.Rect) -> bool:
+        for it in self._bush_map:
+            if rect.colliderect(it):
+                return True
+        return False
 
     def update(self, dt: float):
         return
@@ -85,7 +99,7 @@ class Map:
             target.blit(image, (x * GameSettings.TILE_SIZE, y * GameSettings.TILE_SIZE))
     
     def _create_collision_map(self) -> list[pg.Rect]:
-        rects = []
+        ret = []
         for layer in self.tmxdata.visible_layers:
             if isinstance(layer, pytmx.TiledTileLayer) and ("collision" in layer.name.lower() or "house" in layer.name.lower()):
                 for x, y, gid in layer:
@@ -99,11 +113,25 @@ class Map:
                         if gid != 0:
                             # Rect 吃像素座標
                             # Rect(left, top, width, height) 前兩個是起點，後兩個是大小
-                            rects.append(pg.Rect(x * GameSettings.TILE_SIZE, 
+                            ret.append(pg.Rect(x * GameSettings.TILE_SIZE, 
                                                  y * GameSettings.TILE_SIZE, 
                                                  GameSettings.TILE_SIZE, 
                                                  GameSettings.TILE_SIZE))
-        return rects
+        return ret
+
+    # 依樣畫葫蘆時間
+    def _create_bush_map(self) -> list[pg.Rect]:
+        ret = []
+        for layer in self.tmxdata.visible_layers:
+            # 只要圖層名稱裡面有 bush 就算草叢，我才不管
+            if isinstance(layer, pytmx.TiledTileLayer) and ("bush" in layer.name.lower()):
+                for x, y, gid in layer:
+                    if gid != 0:
+                        ret.append(pg.Rect(x * GameSettings.TILE_SIZE, 
+                                           y * GameSettings.TILE_SIZE, 
+                                           GameSettings.TILE_SIZE, 
+                                           GameSettings.TILE_SIZE))
+        return ret
 
     @classmethod
     def from_dict(cls, data: dict) -> "Map":

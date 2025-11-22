@@ -1,3 +1,7 @@
+"""
+字面上的意思，和百祥戰鬥的介面
+"""
+
 import pygame as pg
 import random
 import sys
