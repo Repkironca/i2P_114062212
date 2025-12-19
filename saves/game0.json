@@ -7,6 +7,11 @@
           "x": 24,
           "y": 23,
           "destination": "gym.tmx"
+        },
+        {
+          "x": 54,
+          "y": 18,
+          "destination": "new_map.tmx"
         }
       ],
       "player": {
@@ -59,6 +64,21 @@
       "player": {
         "x": 12,
         "y": 12
+      },
+      "enemy_trainers": []
+    }, 
+    {
+      "path": "new_map.tmx",
+      "teleport": [
+        {
+          "x": 16,
+          "y": 1,
+          "destination": "map.tmx"
+        }
+      ],
+      "player": {
+        "x": 19,
+        "y": 19
       },
       "enemy_trainers": []
     }

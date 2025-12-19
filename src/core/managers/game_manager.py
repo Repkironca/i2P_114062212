@@ -67,7 +67,9 @@ class GameManager:
             self.next_map = ""
             self.should_change_scene = False
             if self.player:
-                self.player.position = self.maps[self.current_map_key].spawn
+                # 誒直接傳的話你會動到參考，然後就爛了
+                spawn_point = self.maps[self.current_map_key].spawn
+                self.player.position = Position(spawn_point.x, spawn_point.y)
             
     def check_collision(self, rect: pg.Rect) -> bool:
         if self.maps[self.current_map_key].check_collision(rect):
