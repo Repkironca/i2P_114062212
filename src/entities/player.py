@@ -14,6 +14,7 @@ from typing import override
 class Player(Entity):
     speed: float = 4.0 * GameSettings.TILE_SIZE
     game_manager: GameManager
+    is_moving: bool = False # 給 server 用的
 
     def __init__(self, x: float, y: float, game_manager: GameManager) -> None:
         super().__init__(x, y, game_manager)
@@ -42,16 +43,28 @@ class Player(Entity):
 
         enemy_list = self.game_manager.current_enemy_trainers # 被存在這鬼地方
         player_rect = self.animation.rect # 好長，我懶得打
+        input_dir = None
 
         if input_manager.key_down(pg.K_LEFT) or input_manager.key_down(pg.K_a):
             dis.x -= self.speed
+            input_dir = "left"
         if input_manager.key_down(pg.K_RIGHT) or input_manager.key_down(pg.K_d):
             dis.x += self.speed
+            input_dir = "right"
         if input_manager.key_down(pg.K_UP) or input_manager.key_down(pg.K_w):
             dis.y -= self.speed
+            input_dir = "up"
         if input_manager.key_down(pg.K_DOWN) or input_manager.key_down(pg.K_s):
             dis.y += self.speed
+            input_dir = "down"
         
+        # 有 input_dir 方向就是有移動
+        if input_dir is not None:
+            self.animation.switch(input_dir)
+            self.is_moving = True
+        else:
+            self.is_moving = False
+
         if dis.x != 0 and dis.y != 0:
             dis.x /= (2**0.5)
             dis.y /= (2**0.5)
@@ -127,6 +140,11 @@ class Player(Entity):
                 catch_scene = CatchScene(self.game_manager)
                 scene_manager.register_scene("catch", catch_scene)
                 scene_manager.change_scene("catch")
+       
+        # 動畫
+        self.animation.update_pos(self.position)
+        if self.is_moving:
+            self.animation.update(dt)
 
         super().update(dt)
 

@@ -132,8 +132,12 @@ async def handle_client(websocket: Any):
                     
                     # Use the server-assigned player_id, not client-provided
                     # HINT: This part might be helpful for direction change
-                    # Maybe you can add other parameters? 
-                    PLAYER_HANDLER.update(player_id, x, y, map_name)
+                    # Maybe you can add other parameters?
+                    direction = str(data.get("direction", "down"))
+                    is_moving = bool(data.get("is_moving", False))
+                    
+                    # 丟進 update
+                    PLAYER_HANDLER.update(player_id, x, y, map_name, direction, is_moving)
                     
                 elif msg_type == "chat_send":
                     # Send chat message - use server-assigned ID
@@ -193,3 +197,8 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+# 靠北啊你們模板本身就有 bug，好笑嗎
+def unregister(self, pid: int) -> None:
+        with self._lock:
+            self.players.pop(pid, None)

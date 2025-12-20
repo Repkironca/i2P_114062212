@@ -19,7 +19,7 @@ from src.scenes.scene import Scene
 from src.core import GameManager, OnlineManager
 from src.utils import Logger, PositionCamera, GameSettings, Position
 from src.core.services import sound_manager, input_manager
-from src.sprites import Sprite
+from src.sprites import Sprite, Animation
 from typing import override
 from src.interface.components import Button, Checkbox, Slider
 from src.entities.merchant import Merchant
@@ -29,7 +29,8 @@ class GameScene(Scene):
     # 喔我真的好討厭冒號前不空後空的規範，為什麼不是前空後不空：（
     game_manager: GameManager
     online_manager: OnlineManager | None
-    sprite_online: Sprite
+    # 別用單一個 Sprite Online 了，用一串比較好
+    online_anims: dict[int, Animation]
 
     merchant_sell_buttons: list[Button] # 這個是商人的售出按鈕
     credit_icon: Sprite # 左上角那咖常駐的標示
@@ -64,6 +65,8 @@ class GameScene(Scene):
 
     def __init__(self):
         super().__init__()
+        self.online_anims = {}
+
         # Game Manager
         manager = GameManager.load("saves/game0.json")
         if manager is None:
@@ -518,12 +521,51 @@ class GameScene(Scene):
         # Update others
         self.game_manager.bag.update(dt)
         
+        # 處理我最不想動的東西 ==
         if self.game_manager.player is not None and self.online_manager is not None:
-            _ = self.online_manager.update(
-                self.game_manager.player.position.x, 
-                self.game_manager.player.position.y,
-                self.game_manager.current_map.path_name
+            # 抓取本地玩家狀態
+            p = self.game_manager.player
+            current_dir = p.animation.cur_row 
+            
+            # 丟給 Server
+            self.online_manager.update(
+                p.position.x, 
+                p.position.y,
+                self.game_manager.current_map.path_name,
+                current_dir,
+                p.is_moving
             )
+            
+            # 更新其他玩家動畫
+            list_online = self.online_manager.get_list_players()
+            active_ids = {p["id"] for p in list_online}
+            
+            # Dictionary comprehension to keep only active players
+            self.online_anims = {pid: anim for pid, anim in self.online_anims.items() if pid in active_ids}
+
+            for p_data in list_online:
+                pid = p_data["id"]
+                
+                # 你是誰，沒看過你，那建立一個新的
+                if pid not in self.online_anims:
+                    self.online_anims[pid] = Animation(
+                        "character/ow1.png", ["down", "left", "right", "up"], 4,
+                        (GameSettings.TILE_SIZE, GameSettings.TILE_SIZE)
+                    )
+                
+                anim = self.online_anims[pid]
+                
+                # 同步位置
+                anim.update_pos(Position(p_data["x"], p_data["y"]))
+                
+                # 同步方向
+                srv_dir = p_data.get("direction", "down")
+                if srv_dir in ["down", "left", "right", "up"]:
+                    anim.switch(srv_dir)
+                
+                # 同步動畫
+                if p_data.get("is_moving", False):
+                    anim.update(dt)
         
     @override
     def draw(self, screen: pg.Surface):        
@@ -550,14 +592,16 @@ class GameScene(Scene):
 
         self.game_manager.bag.draw(screen)
         
+        # 畫其他玩家
         if self.online_manager and self.game_manager.player:
             list_online = self.online_manager.get_list_players()
-            for player in list_online:
-                if player["map"] == self.game_manager.current_map.path_name:
-                    cam = self.game_manager.player.camera
-                    pos = cam.transform_position_as_position(Position(player["x"], player["y"]))
-                    self.sprite_online.update_pos(pos)
-                    self.sprite_online.draw(screen)
+            for p_data in list_online:
+                # 只畫同一張地圖的人
+                if p_data["map"] == self.game_manager.current_map.path_name:
+                    pid = p_data["id"]
+                    if pid in self.online_anims:
+                        # 拿 animation 的 draw
+                        self.online_anims[pid].draw(screen, self.game_manager.player.camera)
 
         self._draw_credits_ui(screen)
         # Buttons
