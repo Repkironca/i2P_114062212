@@ -6,12 +6,14 @@
         {
           "x": 24,
           "y": 23,
-          "destination": "gym.tmx"
+          "destination": "gym.tmx", 
+          "name": "Gym Teleporter 1"
         },
         {
           "x": 54,
           "y": 18,
-          "destination": "new_map.tmx"
+          "destination": "new_map.tmx", 
+          "name": "Snowfield Teleporter 1"
         }
       ],
       "player": {
@@ -56,17 +58,23 @@
         {
           "x": 11,
           "y": 14,
-          "destination": "map.tmx"
+          "destination": "map.tmx",
+          "name": "Main Map Teleporter 1"
+
         },
         {
           "x": 12,
           "y": 14,
-          "destination": "map.tmx"
+          "destination": "map.tmx", 
+          "name": "Main Map Teleporter 2"
+
         },
         {
           "x": 13,
           "y": 14,
-          "destination": "map.tmx"
+          "destination": "map.tmx", 
+          "name": "Main Map Teleporter 3"
+
         }
       ],
       "player": {
@@ -81,7 +89,8 @@
         {
           "x": 16,
           "y": 1,
-          "destination": "map.tmx"
+          "destination": "map.tmx", 
+          "name": "Main Map Teleporter 1"
         }
       ],
       "player": {

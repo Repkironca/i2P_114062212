@@ -44,6 +44,7 @@ class PositionCamera:
 class Teleport:
     pos: Position
     destination: str
+    name: str = ""
     
     @overload
     def __init__(self, x: int, y: int, destination: str) -> None: ...
@@ -51,6 +52,8 @@ class Teleport:
     def __init__(self, pos: Position, destination: str) -> None: ...
 
     def __init__(self, *args, **kwargs):
+        self.name = kwargs.get("name", "")
+        # 從 kwargs 抓名字，抓不到就給空字串
         if isinstance(args[0], Position):
             self.pos = args[0]
             self.destination = args[1]
@@ -63,12 +66,17 @@ class Teleport:
         return {
             "x": self.pos.x // GameSettings.TILE_SIZE,
             "y": self.pos.y // GameSettings.TILE_SIZE,
-            "destination": self.destination
+            "destination": self.destination, 
+            "name": self.name
         }
     
     @classmethod
     def from_dict(cls, data: dict):
-        return cls(data["x"] * GameSettings.TILE_SIZE, data["y"] * GameSettings.TILE_SIZE, data["destination"])
+        return cls(
+            data["x"] * GameSettings.TILE_SIZE,
+            data["y"] * GameSettings.TILE_SIZE,
+            data["destination"], 
+            name=data.get("name", f"To {data['destination']}"))
     
 class Monster(TypedDict):
     name: str

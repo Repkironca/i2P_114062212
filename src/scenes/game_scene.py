@@ -23,6 +23,7 @@ from src.sprites import Sprite
 from typing import override
 from src.interface.components import Button, Checkbox, Slider
 from src.entities.merchant import Merchant
+from collections import deque # 狗才用 list，慢吞吞
 
 class GameScene(Scene):
     # 喔我真的好討厭冒號前不空後空的規範，為什麼不是前空後不空：（
@@ -34,6 +35,10 @@ class GameScene(Scene):
     credit_icon: Sprite # 左上角那咖常駐的標示
 
     show_overlay: str # Can be Nothing | Setting | Bag
+    # 導航的一些相關資結
+    nav_buttons: list[tuple[Button, str]] # 導航選單的選擇按鈕
+    navigation_path: list[tuple[int, int]] # BFS 的路徑
+    is_navigating: bool # 是否正在導航狀態
 
     # Buttons
     bag_button: Button
@@ -42,6 +47,7 @@ class GameScene(Scene):
     shutdown_button: Button # 關掉遊戲的那個
     save_button: Button
     load_button: Button
+    nav_button: Button
 
     # Checkboxs
     trash_checkbox: Checkbox
@@ -108,6 +114,19 @@ class GameScene(Scene):
             width = btn_size, height = btn_size,
             on_click = lambda: self.set_overlay("Nothing")
         )
+
+        # 這坨拿來控制導航按鈕
+        nav_x = setting_x - btn_size - 10
+        self.nav_button = Button(
+            img_path = "UI/navigation.jpg",
+            img_hovered_path = None,
+            x = nav_x, y = 20,
+            width = btn_size, height = btn_size,
+            on_click = lambda: self.set_overlay("Navigation")
+        )
+        self.nav_buttons = []
+        self.navigation_path = []
+        self.is_navigating = False
 
         # 這坨拿來處理文字
         self.font = pg.font.SysFont("Arial", 24)
@@ -177,12 +196,111 @@ class GameScene(Scene):
 
     # 把 overlay 叫出來和關掉用的 func.
     def set_overlay(self, rep: str) -> None:
-        assert (rep in ["Nothing", "Setting", "Bag", "Merchant", "Minimap"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
+        assert (rep in ["Nothing", "Setting", "Bag", "Merchant", "Minimap", "Navigation"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
         self.show_overlay = rep
+
+        # 其實寫在這裡不太整齊，但我真的懶得找放在下面的哪行比較好
+        if rep == "Navigation":
+            self._init_nav_buttons()
+
         if rep == "Nothing":
             sound_manager.play_sound("gugugaga_2.mp3")
         else:
             sound_manager.play_sound("gugugaga.mp3")
+
+    # 處理導航 Overlay 上的那些前往按鈕
+    def _init_nav_buttons(self):
+        self.nav_buttons = []
+        current_map = self.game_manager.current_map
+        teleporters = current_map.teleporters
+        
+        start_x = (GameSettings.SCREEN_WIDTH // 2) - 150
+        start_y = 150
+        line_height = 60
+        
+        for i, tp in enumerate(teleporters):
+            # 理論上用不到 "To {tp.destination}" 啦，我應該有寫好
+            tp_name = getattr(tp, "name", f"To {tp.destination}")
+            
+            btn = Button(
+                img_path = "UI/raw/UI_Flat_IconArrow01b.png",
+                img_hovered_path = None,
+                x = start_x + 250,
+                y = start_y + i * line_height - 10,
+                width = 100, height = 40,
+                on_click = lambda tx = tp.pos.x, ty  = tp.pos.y: self.start_navigation(tx, ty)
+            )
+            self.nav_buttons.append((btn, tp_name))
+
+    # 開始導航
+    def start_navigation(self, target_x_px: float, target_y_px: float):
+        # 1. 座標 -> 大格子
+        start_tile_x = int(self.game_manager.player.position.x // GameSettings.TILE_SIZE)
+        start_tile_y = int(self.game_manager.player.position.y // GameSettings.TILE_SIZE)
+        
+        raw_end_x = int(target_x_px // GameSettings.TILE_SIZE)
+        raw_end_y = int(target_y_px // GameSettings.TILE_SIZE)
+        target = None
+        # 好我剛剛發現不能無腦傳送到下面一格了
+        candidates = [
+            (raw_end_x, raw_end_y + 1),
+            (raw_end_x, raw_end_y - 1),
+            (raw_end_x, raw_end_y) 
+        ]
+
+        current_map = self.game_manager.current_map
+        width = current_map.tmxdata.width
+        height = current_map.tmxdata.height
+        
+        
+        for cx, cy in candidates:
+            if 0 <= cx < width and 0 <= cy < height:
+                rect = pg.Rect(cx * GameSettings.TILE_SIZE, cy * GameSettings.TILE_SIZE, 
+                               GameSettings.TILE_SIZE, GameSettings.TILE_SIZE)
+                if not current_map.check_collision(rect):
+                    # 找到第一個合法的位置就定案
+                    target = (cx, cy)
+                    break
+        
+        assert target is not None
+        path = self.bfs((start_tile_x, start_tile_y), target)
+        assert path is not None
+        self.navigation_path = path
+        self.is_navigating = True
+        self.set_overlay("Nothing")
+ 
+    # 就 BFS，老熟了
+    def bfs(self, start: tuple[int, int], end: tuple[int, int]) -> list[tuple[int, int]]:
+        queue = deque([[start]]) # 我直接丟整條路進來你信不信
+        visited = {start, (end[0], end[1]-1)} # set，然後我當作傳送門本體有走過，才不會出事
+        current_map = self.game_manager.current_map
+        
+        width_tiles = current_map.tmxdata.width
+        height_tiles = current_map.tmxdata.height
+        
+        while len(queue) > 0:
+            path = queue.popleft()
+            current = path[-1]
+            
+            if current == end:
+                return path[1:] # 起點刪掉好了
+            
+            x, y = current
+            dire = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
+            
+            for nx, ny in dire:
+                # 避免他直接走到傳送門上，我把傳送們也特判掉了
+                if 0 <= nx < width_tiles and 0 <= ny < height_tiles:
+                    rect = pg.Rect(nx * GameSettings.TILE_SIZE, ny * GameSettings.TILE_SIZE, 
+                                   GameSettings.TILE_SIZE, GameSettings.TILE_SIZE)
+
+                    if not current_map.check_collision(rect) and (nx, ny) not in visited:
+                        visited.add((nx, ny))
+                        new_path = list(path)
+                        new_path.append((nx, ny))
+                        queue.append(new_path)
+        
+        return [] # 絕對不該跑到這行，否則會被我 assert 掉
 
     # 字面上的意思，畫小地圖！
     def _draw_minimap(self, screen: pg.Surface):
@@ -318,6 +436,38 @@ class GameScene(Scene):
         # Check if there is assigned next scene
         self.game_manager.try_switch_map()
         
+        # 這整坨都是導航
+        if self.is_navigating and self.navigation_path:
+            # 雖然叫 target，但其實這是下一格要去的地方
+            target_tile = self.navigation_path[0]
+            target_pos = Position(target_tile[0] * GameSettings.TILE_SIZE, target_tile[1] * GameSettings.TILE_SIZE)
+            
+            player = self.game_manager.player
+            speed = 300 * dt # 移動速度
+            
+            # 方向向量
+            dx = target_pos.x - player.position.x
+            dy = target_pos.y - player.position.y
+            
+            # 我本來沒加這段啦，但 Gemini 說加一下比較好，就校正距離？意義不明
+            # 更新，哇靠，不加這段會卡牆
+            if abs(dx) < 1 and abs(dy) < 1:
+                player.position.x = target_pos.x
+                player.position.y = target_pos.y
+                self.navigation_path.pop(0)
+                if not self.navigation_path:
+                    self.is_navigating = False # 導航結束
+            else:
+                if abs(dx) > abs(dy):
+                    step = min(speed, abs(dx)) # 修正小幅度閃現，我們只走小的距離
+                    player.position.x += step if dx > 0 else -step
+                else:
+                    step = min(speed, abs(dy)) # 修正小幅度閃現，我們只走小的距離
+                    player.position.y += step if dy > 0 else -step
+                
+                player.animation.update_pos(player.position)
+                player.animation.update(dt)
+
         # about overlay
         if self.show_overlay != "Nothing":
             self.close_button.update(dt)
@@ -338,24 +488,30 @@ class GameScene(Scene):
             elif self.show_overlay == "Minimap":
                 if input_manager.key_pressed(pg.K_m):
                     self.set_overlay("Nothing")
+            elif self.show_overlay == "Navigation":
+                for btn, _ in self.nav_buttons:
+                    btn.update(dt)
         else:
             self.bag_button.update(dt)
             self.setting_button.update(dt)
+            self.nav_button.update(dt)
 
             if input_manager.key_pressed(pg.K_m):
                 self.set_overlay("Minimap")
 
-            # 他們不像按鈕一樣有 on_click 可以用，所以只能手刻
-            for merchant in self.game_manager.current_merchants:
-                merchant.update(dt)
-                # 偵測是否按下空白鍵開啟商店
-                if merchant.detected and input_manager.key_pressed(pg.K_SPACE):
-                    self._init_merchant_buttons()
-                    self.set_overlay("Merchant")
+            # 我怕有人無聊到邊導航邊互動或移動，我會氣死
+            if not self.is_navigating:
+                # 他們不像按鈕一樣有 on_click 可以用，所以只能手刻
+                for merchant in self.game_manager.current_merchants:
+                    merchant.update(dt)
+                    # 偵測是否按下空白鍵開啟商店
+                    if merchant.detected and input_manager.key_pressed(pg.K_SPACE):
+                        self._init_merchant_buttons()
+                        self.set_overlay("Merchant")
+                if self.game_manager.player:
+                    self.game_manager.player.update(dt)
 
-        # Update player and other data
-        if self.game_manager.player:
-            self.game_manager.player.update(dt)
+        # Update ememies
         for enemy in self.game_manager.current_enemy_trainers:
             enemy.update(dt)
             
@@ -407,6 +563,7 @@ class GameScene(Scene):
         # Buttons
         self.bag_button.draw(screen)
         self.setting_button.draw(screen)
+        self.nav_button.draw(screen)
 
         if self.show_overlay != "Nothing":
             overlay_surface = pg.Surface((GameSettings.SCREEN_WIDTH-40, GameSettings.SCREEN_HEIGHT-40), pg.SRCALPHA)
@@ -428,6 +585,18 @@ class GameScene(Scene):
                 self._draw_merchant(screen)
             elif self.show_overlay == "Minimap":
                     self._draw_minimap(screen)
+            elif self.show_overlay == "Navigation":
+                self._draw_navigation(screen)
+
+    # 畫導航介面
+    def _draw_navigation(self, screen: pg.Surface):
+        title = self.title_font.render("--NAVIGATION--", True, (0, 255, 255))
+        screen.blit(title, (60, 40))
+        
+        for btn, name in self.nav_buttons:
+            btn.draw(screen)
+            text_surf = self.font.render(name, True, (255, 255, 255))
+            screen.blit(text_surf, (btn.hitbox.left - text_surf.get_width() - 20, btn.hitbox.centery - text_surf.get_height() // 2))
 
     # 這個也太雜了，畫金幣
     def _draw_credits_ui(self, screen: pg.Surface):
