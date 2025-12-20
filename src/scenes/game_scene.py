@@ -177,12 +177,50 @@ class GameScene(Scene):
 
     # 把 overlay 叫出來和關掉用的 func.
     def set_overlay(self, rep: str) -> None:
-        assert (rep in ["Nothing", "Setting", "Bag", "Merchant"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
+        assert (rep in ["Nothing", "Setting", "Bag", "Merchant", "Minimap"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
         self.show_overlay = rep
         if rep == "Nothing":
             sound_manager.play_sound("gugugaga_2.mp3")
         else:
             sound_manager.play_sound("gugugaga.mp3")
+
+    # 字面上的意思，畫小地圖！
+    def _draw_minimap(self, screen: pg.Surface):
+        # 這好像是直接把整張圖片幹過來，十分舒服
+        raw_map_surf = self.game_manager.current_map._surface
+        
+        max_w = GameSettings.SCREEN_WIDTH * 0.75
+        max_h = GameSettings.SCREEN_HEIGHT * 0.75
+        
+        scale_w = max_w / raw_map_surf.get_width()
+        scale_h = max_h / raw_map_surf.get_height()
+        # 避免直接無情超出螢幕
+        scale = min(scale_w, scale_h)
+        
+        new_w = int(raw_map_surf.get_width() * scale)
+        new_h = int(raw_map_surf.get_height() * scale)
+        minimap_surf = pg.transform.scale(raw_map_surf, (new_w, new_h))
+        
+        start_x = (GameSettings.SCREEN_WIDTH - new_w) // 2
+        start_y = (GameSettings.SCREEN_HEIGHT - new_h) // 2
+        
+        title = self.title_font.render("--- Minimap ---", True, (255, 255, 0))
+        screen.blit(title, (GameSettings.SCREEN_WIDTH // 2 - title.get_width() // 2, start_y - 40))
+        
+        pg.draw.rect(screen, (0, 0, 0, 150), (start_x - 5, start_y - 5, new_w + 10, new_h + 10))
+        screen.blit(minimap_surf, (start_x, start_y))
+        
+        # 這邊就是座標了
+        px = self.game_manager.player.position.x * scale
+        py = self.game_manager.player.position.y * scale
+        
+        mini_px = int(px)
+        mini_py = int(py)
+        # 左(上)界要和 minimap 同步
+        final_x = start_x + mini_px
+        final_y = start_y + mini_py
+    
+        pg.draw.circle(screen, (255, 0, 0), (final_x, final_y), 5)
 
     # 計算 selling_button 們放哪裡用的
     def _init_merchant_buttons(self):
@@ -297,9 +335,15 @@ class GameScene(Scene):
             elif self.show_overlay == "Merchant":
                 for btn in self.merchant_sell_buttons:
                      btn.update(dt)
+            elif self.show_overlay == "Minimap":
+                if input_manager.key_pressed(pg.K_m):
+                    self.set_overlay("Nothing")
         else:
             self.bag_button.update(dt)
             self.setting_button.update(dt)
+
+            if input_manager.key_pressed(pg.K_m):
+                self.set_overlay("Minimap")
 
             # 他們不像按鈕一樣有 on_click 可以用，所以只能手刻
             for merchant in self.game_manager.current_merchants:
@@ -382,6 +426,8 @@ class GameScene(Scene):
                 self._draw_setting(screen)
             elif self.show_overlay == "Merchant":
                 self._draw_merchant(screen)
+            elif self.show_overlay == "Minimap":
+                    self._draw_minimap(screen)
 
     # 這個也太雜了，畫金幣
     def _draw_credits_ui(self, screen: pg.Surface):
