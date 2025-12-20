@@ -13,21 +13,26 @@ import threading
 import time
 import os
 import sys
+import random
 
 from src.scenes.scene import Scene
 from src.core import GameManager, OnlineManager
 from src.utils import Logger, PositionCamera, GameSettings, Position
-from src.core.services import sound_manager
+from src.core.services import sound_manager, input_manager
 from src.sprites import Sprite
 from typing import override
 from src.interface.components import Button, Checkbox, Slider
+from src.entities.merchant import Merchant
 
 class GameScene(Scene):
     # 喔我真的好討厭冒號前不空後空的規範，為什麼不是前空後不空：（
     game_manager: GameManager
     online_manager: OnlineManager | None
     sprite_online: Sprite
-    
+
+    merchant_sell_buttons: list[Button] # 這個是商人的售出按鈕
+    credit_icon: Sprite # 左上角那咖常駐的標示
+
     show_overlay: str # Can be Nothing | Setting | Bag
 
     # Buttons
@@ -166,14 +171,65 @@ class GameScene(Scene):
             on_click=self.load_game
         )
 
+        # 這坨是商人
+        self.credit_icon = Sprite("ingame_ui/coin.png", (32, 32))
+        self.merchant_sell_buttons = [] # 一大串販賣按鈕
+
     # 把 overlay 叫出來和關掉用的 func.
     def set_overlay(self, rep: str) -> None:
-        assert (rep in ["Nothing", "Setting", "Bag"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
+        assert (rep in ["Nothing", "Setting", "Bag", "Merchant"]), f"set_overlay 被丟了奇怪的東西進來：{rep}"
         self.show_overlay = rep
         if rep == "Nothing":
             sound_manager.play_sound("gugugaga_2.mp3")
         else:
             sound_manager.play_sound("gugugaga.mp3")
+
+    # 計算 selling_button 們放哪裡用的
+    def _init_merchant_buttons(self):
+        self.merchant_sell_buttons = []
+        bag = self.game_manager.bag
+        
+        start_x = 400
+        current_y = 100 + 35
+    
+        if len(bag.monsters) == 0:
+            current_y += 35
+        else:
+            current_y += len(bag.monsters) * 35
+            
+        current_y += 25
+        current_y += 35
+        
+        for i, item in enumerate(bag.items):
+            btn = Button(
+                img_path="UI/button_shop.png",
+                img_hovered_path="UI/button_shop_hover.png",
+                x=start_x, 
+                y=current_y - 5,
+                width=60, height=30,
+                on_click=lambda idx=i: self._sell_item(idx)
+            )
+            self.merchant_sell_buttons.append(btn)
+            current_y += 35
+
+
+    # 賣東西，啊因為我很懶，所以不能買東西
+    def _sell_item(self, index: int):
+        bag = self.game_manager.bag
+        if 0 <= index < len(bag.items):
+            item = bag.items[index]
+            bag.credit += random.randint(1, 10)
+    
+            if item['count'] > 1:
+                item['count'] -= 1
+            else:
+                bag.items.pop(index)
+            
+            # 誒明天早上起來換個音效啦
+            sound_manager.play_sound("gugugaga.mp3")
+            
+            # 背包變了，按鈕就要重新生成一次
+            self._init_merchant_buttons()
 
     # 從 setting_scene 抄來的 shutdown_button 專用 func.
     @staticmethod
@@ -238,9 +294,20 @@ class GameScene(Scene):
                 GameSettings.AUDIO_VOLUME = current_vol
                 if sound_manager.current_bgm:
                     sound_manager.current_bgm.set_volume(current_vol)
+            elif self.show_overlay == "Merchant":
+                for btn in self.merchant_sell_buttons:
+                     btn.update(dt)
         else:
             self.bag_button.update(dt)
             self.setting_button.update(dt)
+
+            # 他們不像按鈕一樣有 on_click 可以用，所以只能手刻
+            for merchant in self.game_manager.current_merchants:
+                merchant.update(dt)
+                # 偵測是否按下空白鍵開啟商店
+                if merchant.detected and input_manager.key_pressed(pg.K_SPACE):
+                    self._init_merchant_buttons()
+                    self.set_overlay("Merchant")
 
         # Update player and other data
         if self.game_manager.player:
@@ -278,6 +345,9 @@ class GameScene(Scene):
         for enemy in self.game_manager.current_enemy_trainers:
             enemy.draw(screen, camera)
 
+        for merchant in self.game_manager.current_merchants:
+            merchant.draw(screen, camera)
+
         self.game_manager.bag.draw(screen)
         
         if self.online_manager and self.game_manager.player:
@@ -289,9 +359,11 @@ class GameScene(Scene):
                     self.sprite_online.update_pos(pos)
                     self.sprite_online.draw(screen)
 
+        self._draw_credits_ui(screen)
         # Buttons
         self.bag_button.draw(screen)
         self.setting_button.draw(screen)
+
         if self.show_overlay != "Nothing":
             overlay_surface = pg.Surface((GameSettings.SCREEN_WIDTH-40, GameSettings.SCREEN_HEIGHT-40), pg.SRCALPHA)
             overlay_surface.fill((0, 0, 0, 150)) # 聽說 150 是半透明
@@ -308,6 +380,15 @@ class GameScene(Scene):
                 self._draw_backpack(screen)
             elif self.show_overlay == "Setting":
                 self._draw_setting(screen)
+            elif self.show_overlay == "Merchant":
+                self._draw_merchant(screen)
+
+    # 這個也太雜了，畫金幣
+    def _draw_credits_ui(self, screen: pg.Surface):
+        self.credit_icon.update_pos(Position(10, 10))
+        self.credit_icon.draw(screen)
+        credit_txt = self.title_font.render(f"{self.game_manager.bag.credit}", True, (255, 215, 0)) # 金色
+        screen.blit(credit_txt, (50, 10))
 
     # 這坨太雜了我丟出來寫
     def _draw_backpack(self, screen: pg.Surface) -> None:
@@ -371,3 +452,15 @@ class GameScene(Scene):
         # shutdown_button
         dnp_rect = self.shutdown_button.hitbox
         screen.blit(self.txt_do_not_press, (dnp_rect.right + 20, dnp_rect.centery - 12))
+
+    # 我用了一個超髒的做法，抄背包
+    def _draw_merchant(self, screen: pg.Surface):
+        title = self.title_font.render("MERCHANT - SELL TRASH TO ME. Nope, not yourself plz", True, (0, 255, 255))
+        screen.blit(title, (60, 40))
+        
+        self._draw_backpack(screen)
+        for btn in self.merchant_sell_buttons:
+            btn.draw(screen)
+            
+        pg.draw.rect(screen, (0, 0, 0), (60, 40, 300, 40)) # 塗黑原本的 GUGUGAGA
+        screen.blit(title, (60, 40)) # 畫上新標題

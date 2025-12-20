@@ -109,7 +109,7 @@ class EnemyTrainer(Entity):
         elif self.los_direction == Direction.LEFT:
             return pygame.Rect(x - dist, y, dist, tile_size)
         elif self.los_direction == Direction.RIGHT:
-            return pygame.Rect(x + tile_size, y, dist, tile_sizee)
+            return pygame.Rect(x + tile_size, y, dist, tile_size)
             
         return None
 

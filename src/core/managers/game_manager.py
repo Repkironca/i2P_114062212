@@ -9,11 +9,13 @@ if TYPE_CHECKING:
     from src.entities.player import Player
     from src.entities.enemy_trainer import EnemyTrainer
     from src.data.bag import Bag
+    from src.entities.merchant import Merchant
 
 class GameManager:
     # Entities
     player: Player | None
     enemy_trainers: dict[str, list[EnemyTrainer]]
+    merchants: dict[str, list[Merchant]]
     bag: "Bag"
     
     # Map properties
@@ -23,10 +25,11 @@ class GameManager:
     # Changing Scene properties
     should_change_scene: bool
     next_map: str
-    
+
     def __init__(self, maps: dict[str, Map], start_map: str, 
                  player: Player | None,
                  enemy_trainers: dict[str, list[EnemyTrainer]], 
+                 merchants: dict[str, list[Merchant]],
                  bag: Bag | None = None):
                      
         from src.data.bag import Bag
@@ -35,8 +38,9 @@ class GameManager:
         self.current_map_key = start_map
         self.player = player
         self.enemy_trainers = enemy_trainers
-        self.bag = bag if bag is not None else Bag([], [])
-        
+        self.bag = bag if bag is not None else Bag([], [], 0) # 多補一個零，給 credit 用ㄉ
+        self.merchants = merchants
+
         # Check If you should change scene
         self.should_change_scene = False
         self.next_map = ""
@@ -52,7 +56,12 @@ class GameManager:
     @property
     def current_teleporter(self) -> list[Teleport]:
         return self.maps[self.current_map_key].teleporters
-    
+
+    @property
+    # 其實我覺得這滿沒用的，但 LLM 想這麼寫，成全他
+    def current_merchants(self) -> list[Merchant]:
+        return self.merchants.get(self.current_map_key, [])
+
     def switch_map(self, target: str) -> None:
         if target not in self.maps:
             Logger.warning(f"Map '{target}' not loaded; cannot switch.")
@@ -110,6 +119,7 @@ class GameManager:
         for key, m in self.maps.items():
             block = m.to_dict()
             block["enemy_trainers"] = [t.to_dict() for t in self.enemy_trainers.get(key, [])]
+            block["merchants"] = [m.to_dict() for m in self.merchants.get(key, [])]
             map_blocks.append(block)
         return {
             "map": map_blocks,
@@ -120,6 +130,8 @@ class GameManager:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "GameManager":
+        # Local Import 就好啦，上次亂開全域結果壞掉
+        from src.entities.merchant import Merchant
         from src.maps.map import Map
         from src.entities.player import Player
         from src.entities.enemy_trainer import EnemyTrainer
@@ -130,6 +142,7 @@ class GameManager:
         maps: dict[str, Map] = {}
         player_spawns: dict[str, Position] = {}
         trainers: dict[str, list[EnemyTrainer]] = {}
+        merchants: dict[str, list[Merchant]] = {}
 
         for entry in maps_data:
             path = entry["path"]
@@ -145,10 +158,17 @@ class GameManager:
             maps, current_map,
             None, # Player
             trainers,
+            merchants, 
             bag=None
         )
         gm.current_map_key = current_map
         
+        Logger.info("Loading merchants")
+        for m in data["map"]:
+            path = m["path"]
+            raw_data = m.get("merchants", []) 
+            merchants[path] = [Merchant.from_dict(t, gm) for t in raw_data]
+
         Logger.info("Loading enemy trainers")
         for m in data["map"]:
             raw_data = m["enemy_trainers"]
@@ -161,5 +181,9 @@ class GameManager:
         Logger.info("Loading bag")
         from src.data.bag import Bag as _Bag
         gm.bag = Bag.from_dict(data.get("bag", {})) if data.get("bag") else _Bag([], [])
+
+        for m in data["map"]:
+            raw_data = m.get("merchants", [])
+            gm.merchants[m["path"]] = [Merchant.from_dict(t, gm) for t in raw_data]
 
         return gm

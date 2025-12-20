@@ -40,6 +40,14 @@
           "facing": "UP",
           "max_tiles": 2
         }
+      ], 
+      "merchants": [
+        {
+          "x": 22,
+          "y": 25,
+          "facing": "RIGHT",
+          "max_tiles": 2
+        }
       ]
     },
     {
