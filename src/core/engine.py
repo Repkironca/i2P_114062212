@@ -1,4 +1,5 @@
 import pygame as pg
+import sys
 
 from src.utils import GameSettings, Logger
 from .services import scene_manager, input_manager
@@ -38,16 +39,29 @@ class Engine:
 
         while self.running:
             dt = self.clock.tick(GameSettings.FPS) / 1000.0
-            self.handle_events()
+
+            # 每一幀開始時，重置 InputManager 的單次點擊狀態
+            input_manager.reset()
+            events = pg.event.get()
+            
+            for event in events:
+                # 處理視窗關閉
+                if event.type == pg.QUIT:
+                    self.running = False
+                
+                # 分發事件給 Input Manager
+                input_manager.handle_events(event)
+
+                # 分發事件給目前的 Scene (讓 ChatBox 接收文字輸入)
+                if scene_manager._current_scene:
+                    if hasattr(scene_manager._current_scene, "handle_event"):
+                        scene_manager._current_scene.handle_event(event)
+
             self.update(dt)
             self.render()
 
-    def handle_events(self):
-        input_manager.reset()
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                self.running = False
-            input_manager.handle_events(event)
+        pg.quit()
+        sys.exit()
 
     def update(self, dt: float):
         scene_manager.update(dt)

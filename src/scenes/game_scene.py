@@ -24,6 +24,7 @@ from typing import override
 from src.interface.components import Button, Checkbox, Slider
 from src.entities.merchant import Merchant
 from collections import deque # 狗才用 list，慢吞吞
+from src.interface.chatbox import ChatBox
 
 class GameScene(Scene):
     # 喔我真的好討厭冒號前不空後空的規範，為什麼不是前空後不空：（
@@ -196,6 +197,12 @@ class GameScene(Scene):
         # 這坨是商人
         self.credit_icon = Sprite("ingame_ui/coin.png", (32, 32))
         self.merchant_sell_buttons = [] # 一大串販賣按鈕
+
+        # 這坨是 online 的 chatbox
+        if self.online_manager:
+            self.chat_box = ChatBox(self.online_manager)
+        else:
+            self.chat_box = None
 
     # 把 overlay 叫出來和關掉用的 func.
     def set_overlay(self, rep: str) -> None:
@@ -436,6 +443,54 @@ class GameScene(Scene):
         
     @override
     def update(self, dt: float):
+        list_online = []
+
+        # 如果聊天室開啟中，暫停一切玩家移動與互動
+        if self.chat_box and self.chat_box.active:
+            self.chat_box.update()
+            if self.online_manager:
+                # 保持接收封包，但不傳送移動
+                self.online_manager.update(
+                    self.game_manager.player.position.x,
+                    self.game_manager.player.position.y,
+                    self.game_manager.current_map.path_name,
+                    self.game_manager.player.animation.cur_row,
+                    False # is_moving = False
+                )
+                list_online = self.online_manager.get_list_players()
+
+            active_ids = {p["id"] for p in list_online}
+            # 但其他玩家的位置要處理一下
+            self.online_anims = {pid: anim for pid, anim in self.online_anims.items() if pid in active_ids}
+
+            for p_data in list_online:
+                pid = p_data["id"]
+                
+                # 你是誰，沒看過你，那建立一個新的
+                if pid not in self.online_anims:
+                    self.online_anims[pid] = Animation(
+                        "character/ow1.png", ["down", "left", "right", "up"], 4,
+                        (GameSettings.TILE_SIZE, GameSettings.TILE_SIZE)
+                    )
+                
+                anim = self.online_anims[pid]
+                
+                # 同步位置
+                anim.update_pos(Position(p_data["x"], p_data["y"]))
+                
+                # 同步方向
+                srv_dir = p_data.get("direction", "down")
+                if srv_dir in ["down", "left", "right", "up"]:
+                    anim.switch(srv_dir)
+                
+                # 同步動畫
+                if p_data.get("is_moving", False):
+                    anim.update(dt)
+                self._update_online_players(dt) 
+
+            # 所以下面的扣都別想跑
+            return
+
         # Check if there is assigned next scene
         self.game_manager.try_switch_map()
         
@@ -539,7 +594,7 @@ class GameScene(Scene):
             # 更新其他玩家動畫
             list_online = self.online_manager.get_list_players()
             active_ids = {p["id"] for p in list_online}
-            
+
             # Dictionary comprehension to keep only active players
             self.online_anims = {pid: anim for pid, anim in self.online_anims.items() if pid in active_ids}
 
@@ -566,6 +621,10 @@ class GameScene(Scene):
                 # 同步動畫
                 if p_data.get("is_moving", False):
                     anim.update(dt)
+
+                # 同步聊天室
+                if self.chat_box:
+                    self.chat_box.update()
         
     @override
     def draw(self, screen: pg.Surface):        
@@ -608,6 +667,10 @@ class GameScene(Scene):
         self.bag_button.draw(screen)
         self.setting_button.draw(screen)
         self.nav_button.draw(screen)
+
+        # chatbox
+        if self.chat_box:
+            self.chat_box.draw(screen)
 
         if self.show_overlay != "Nothing":
             overlay_surface = pg.Surface((GameSettings.SCREEN_WIDTH-40, GameSettings.SCREEN_HEIGHT-40), pg.SRCALPHA)
@@ -723,3 +786,33 @@ class GameScene(Scene):
             
         pg.draw.rect(screen, (0, 0, 0), (60, 40, 300, 40)) # 塗黑原本的 GUGUGAGA
         screen.blit(title, (60, 40)) # 畫上新標題
+
+    def handle_event(self, event: pg.event.Event):
+        if self.chat_box:
+            self.chat_box.handle_event(event)
+            
+            # 處理開啟聊天室的按鍵
+            if not self.chat_box.active:
+                if event.type == pg.KEYDOWN and event.key == pg.K_t:
+                    self.chat_box.toggle()
+
+    def _update_online_players(self, dt: float):
+         if self.online_manager and self.game_manager.player:
+            list_online = self.online_manager.get_list_players()
+            active_ids = {p["id"] for p in list_online}
+            self.online_anims = {pid: anim for pid, anim in self.online_anims.items() if pid in active_ids}
+            
+            for p_data in list_online:
+                pid = p_data["id"]
+                if pid not in self.online_anims:
+                    self.online_anims[pid] = Animation(
+                        "character/ow1.png", ["down", "left", "right", "up"], 4,
+                        (GameSettings.TILE_SIZE, GameSettings.TILE_SIZE)
+                    )
+                anim = self.online_anims[pid]
+                anim.update_pos(Position(p_data["x"], p_data["y"]))
+                srv_dir = p_data.get("direction", "down")
+                if srv_dir in ["down", "left", "right", "up"]:
+                    anim.switch(srv_dir)
+                if p_data.get("is_moving", False):
+                    anim.update(dt)
